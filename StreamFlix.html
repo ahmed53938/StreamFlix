@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamFlix - Movies & TV Shows</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0f1015',
+                            800: '#181922',
+                            700: '#222431',
+                            600: '#2f3244',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen flex flex-col antialiased selection:bg-red-600 selection:text-white">
+
+    <!-- Navbar -->
+    <header class="sticky top-0 z-50 bg-dark-900/90 backdrop-blur-md border-b border-dark-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-8">
+                <a href="#" onclick="showHome()" class="flex items-center space-x-2 text-red-600 font-bold text-2xl tracking-wider">
+                    <i class="fa-solid fa-play-circle"></i>
+                    <span>STREAMFLIX</span>
+                </a>
+                <nav class="hidden md:flex space-x-6 text-sm font-medium">
+                    <button onclick="showHome()" class="text-gray-300 hover:text-white transition">Home</button>
+                    <button onclick="filterByType('movie')" class="text-gray-300 hover:text-white transition">Movies</button>
+                    <button onclick="filterByType('tv')" class="text-gray-300 hover:text-white transition">TV Shows</button>
+                </nav>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="relative hidden sm:block">
+                    <input type="text" id="searchInput" placeholder="Search movies, tv shows..." 
+                        class="bg-dark-800 text-sm text-gray-200 rounded-full pl-10 pr-4 py-2 w-48 sm:w-64 focus:outline-none focus:ring-2 focus:ring-red-600 border border-dark-700 transition"
+                        onkeydown="if(event.key === 'Enter') handleSearch()">
+                    <i class="fa-solid fa-search absolute left-3.5 top-3 text-gray-400 text-sm"></i>
+                </div>
+                <button onclick="openSettingsModal()" class="bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white px-3 py-2 rounded-lg text-sm font-medium border border-dark-700 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-key text-red-500"></i>
+                    <span class="hidden sm:inline">API Keys</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
+
+        <!-- API Key Required Banner / Prompt State -->
+        <div id="apiKeyPromptView" class="hidden py-16 text-center max-w-lg mx-auto space-y-4">
+            <div class="w-16 h-16 bg-red-600/10 text-red-500 rounded-full flex items-center justify-center mx-auto text-2xl border border-red-600/20">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white">API Credentials Required</h2>
+            <p class="text-gray-400 text-sm">
+                StreamFlix now requires your own TMDB API key to load movies, ratings, and artwork. OMDB is optional for extended metadata.
+            </p>
+            <button onclick="openSettingsModal()" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2.5 rounded-xl transition shadow-lg shadow-red-600/30">
+                Configure API Keys
+            </button>
+        </div>
+
+        <!-- Home View / Hero & Carousels -->
+        <div id="homeView" class="space-y-8">
+            <!-- Hero Banner -->
+            <div id="heroBanner" class="relative rounded-2xl overflow-hidden bg-dark-800 h-[400px] sm:h-[480px] shadow-2xl flex items-end">
+                <div class="absolute inset-0 bg-gradient-to-t from-dark-900 via-dark-900/40 to-transparent z-10"></div>
+                <img id="heroImage" src="https://placehold.co/1200x600/181922/ffffff?text=Loading..." alt="Hero Banner" class="absolute inset-0 w-full h-full object-cover opacity-60">
+                <div class="relative z-20 p-6 sm:p-10 max-w-2xl space-y-3">
+                    <div id="heroBadge" class="inline-block bg-red-600 text-white text-xs font-semibold px-2.5 py-1 rounded">FEATURED</div>
+                    <h1 id="heroTitle" class="text-2xl sm:text-4xl font-extrabold text-white leading-tight">Loading Featured Title...</h1>
+                    <p id="heroOverview" class="text-sm sm:text-base text-gray-300 line-clamp-3">Please wait while we fetch top trending titles for you.</p>
+                    <div class="pt-2 flex items-center space-x-3">
+                        <button id="heroPlayBtn" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center space-x-2 transition shadow-lg shadow-red-600/30">
+                            <i class="fa-solid fa-play"></i>
+                            <span>Watch Now</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trending Movies Row -->
+            <section class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg sm:text-xl font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-fire text-red-600"></i>
+                        <span>Trending Movies</span>
+                    </h2>
+                </div>
+                <div id="trendingMoviesRow" class="flex space-x-4 overflow-x-auto no-scrollbar pb-4 pt-1">
+                    <!-- Dynamic movie cards -->
+                </div>
+            </section>
+
+            <!-- Trending TV Shows Row -->
+            <section class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg sm:text-xl font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-tv text-red-600"></i>
+                        <span>Trending TV Shows</span>
+                    </h2>
+                </div>
+                <div id="trendingTvRow" class="flex space-x-4 overflow-x-auto no-scrollbar pb-4 pt-1">
+                    <!-- Dynamic tv cards -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Search / Category Results View -->
+        <div id="resultsView" class="hidden space-y-6">
+            <div class="flex items-center justify-between border-b border-dark-700 pb-4">
+                <h2 id="resultsHeading" class="text-xl font-bold text-white">Search Results</h2>
+                <button onclick="showHome()" class="text-sm text-gray-400 hover:text-white transition flex items-center space-x-1">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Back to Home</span>
+                </button>
+            </div>
+            <div id="resultsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <!-- Dynamic cards -->
+            </div>
+        </div>
+
+        <!-- Watch / Player View -->
+        <div id="watchView" class="hidden space-y-6">
+            <button onclick="goBackFromWatch()" class="text-sm text-gray-400 hover:text-white transition flex items-center space-x-1">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back</span>
+            </button>
+
+            <!-- Embedded Player Container -->
+            <div class="relative w-full aspect-video bg-dark-800 rounded-2xl overflow-hidden shadow-2xl border border-dark-700">
+                <iframe id="videoPlayerFrame" src="" class="absolute inset-0 w-full h-full border-0" allowfullscreen ></iframe>
+            </div>
+
+            <!-- TV Episode Selector Controls -->
+            <div id="episodeSelectorContainer" class="hidden bg-dark-800 p-4 rounded-xl border border-dark-700 flex flex-wrap items-center gap-4">
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm font-medium text-gray-300">Season:</label>
+                    <select id="seasonSelect" onchange="onSeasonChange()" class="bg-dark-700 text-white text-sm rounded-lg px-3 py-1.5 border border-dark-600 focus:outline-none focus:ring-2 focus:ring-red-600">
+                    </select>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm font-medium text-gray-300">Episode:</label>
+                    <select id="episodeSelect" onchange="onEpisodeChange()" class="bg-dark-700 text-white text-sm rounded-lg px-3 py-1.5 border border-dark-600 focus:outline-none focus:ring-2 focus:ring-red-600">
+                    </select>
+                </div>
+            </div>
+
+            <!-- Title Info & Metadata -->
+            <div class="bg-dark-800 rounded-2xl p-6 border border-dark-700 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 id="watchTitle" class="text-2xl sm:text-3xl font-bold text-white">Title Name</h1>
+                        <div class="flex items-center space-x-4 text-sm text-gray-400 mt-2">
+                            <span id="watchYear" class="bg-dark-700 px-2 py-0.5 rounded text-gray-300">2026</span>
+                            <span id="watchRating" class="flex items-center text-yellow-500"><i class="fa-solid fa-star mr-1"></i> 0.0</span>
+                            <span id="watchRuntime">0 min</span>
+                        </div>
+                    </div>
+                </div>
+                <p id="watchOverview" class="text-gray-300 text-sm sm:text-base leading-relaxed">Detailed overview description...</p>
+                <div id="watchGenres" class="flex flex-wrap gap-2 pt-2">
+                    <!-- Dynamic genres -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Settings / API Keys Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-700 rounded-2xl max-w-md w-full p-6 space-y-6 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-dark-700 pb-4">
+                <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-key text-red-600"></i>
+                    <span>API Key Configuration</span>
+                </h3>
+                <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- TMDB Input -->
+                <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-gray-200">
+                        TMDB API Key <span class="text-red-500">*</span>
+                    </label>
+                    <input type="password" id="tmdbKeyInput" placeholder="Enter your v3 API key" 
+                        class="w-full bg-dark-900 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-600">
+                    <p class="text-xs text-gray-400">
+                        Get a free key from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-red-500 hover:underline">TMDB API Settings</a>.
+                    </p>
+                </div>
+
+                <!-- OMDB Input -->
+                <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-gray-200">
+                        OMDB API Key <span class="text-gray-500">(Optional)</span>
+                    </label>
+                    <input type="password" id="omdbKeyInput" placeholder="Enter your OMDB key" 
+                        class="w-full bg-dark-900 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-600">
+                    <p class="text-xs text-gray-400">
+                        Get a free key from <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="text-red-500 hover:underline">OMDB API</a>.
+                    </p>
+                </div>
+            </div>
+
+            <div id="settingsError" class="text-xs text-red-500 hidden">Please provide a valid TMDB API key.</div>
+
+            <div class="flex items-center justify-end space-x-3 pt-2 border-t border-dark-700">
+                <button onclick="closeSettingsModal()" class="px-4 py-2 rounded-xl text-sm font-medium bg-dark-700 text-gray-300 hover:text-white transition">Cancel</button>
+                <button onclick="saveApiKeys()" class="px-5 py-2 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-700 text-white transition shadow-lg shadow-red-600/30">Save Keys</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark-800 border-t border-dark-700 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-400">
+            <p>&copy; 2026 StreamFlix. Powered by User-Provided TMDB & OMDB APIs with VidSrc integration.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let TMDB_API_KEY = localStorage.getItem('streamflix_tmdb_key') || "";
+        let OMDB_API_KEY = localStorage.getItem('streamflix_omdb_key') || "";
+
+        const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+        const IMG_BASE_URL = "https://image.tmdb.org/t/p/w500";
+        const HERO_IMG_BASE = "https://image.tmdb.org/t/p/original";
+
+        let currentActiveItem = null;
+        let currentSeason = 1;
+        let currentEpisode = 1;
+        let seasonsList = [];
+
+        // Initialize application on load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!TMDB_API_KEY) {
+                showApiKeyPrompt();
+            } else {
+                loadHomeData();
+            }
+        });
+
+        function showApiKeyPrompt() {
+            document.getElementById('homeView').classList.add('hidden');
+            document.getElementById('resultsView').classList.add('hidden');
+            document.getElementById('watchView').classList.add('hidden');
+            document.getElementById('apiKeyPromptView').classList.remove('hidden');
+        }
+
+        function openSettingsModal() {
+            document.getElementById('tmdbKeyInput').value = TMDB_API_KEY;
+            document.getElementById('omdbKeyInput').value = OMDB_API_KEY;
+            document.getElementById('settingsError').classList.add('hidden');
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function saveApiKeys() {
+            const tmdbVal = document.getElementById('tmdbKeyInput').value.trim();
+            const omdbVal = document.getElementById('omdbKeyInput').value.trim();
+
+            if (!tmdbVal) {
+                document.getElementById('settingsError').textContent = "TMDB API Key is required.";
+                document.getElementById('settingsError').classList.remove('hidden');
+                return;
+            }
+
+            TMDB_API_KEY = tmdbVal;
+            OMDB_API_KEY = omdbVal;
+
+            localStorage.setItem('streamflix_tmdb_key', TMDB_API_KEY);
+            localStorage.setItem('streamflix_omdb_key', OMDB_API_KEY);
+
+            closeSettingsModal();
+            document.getElementById('apiKeyPromptView').classList.add('hidden');
+            showHome();
+            loadHomeData();
+        }
+
+        async function loadHomeData() {
+            if (!TMDB_API_KEY) {
+                showApiKeyPrompt();
+                return;
+            }
+
+            try {
+                const [trendingMoviesRes, trendingTvRes] = await Promise.all([
+                    fetch(`${TMDB_BASE_URL}/trending/movie/day?api_key=${TMDB_API_KEY}`),
+                    fetch(`${TMDB_BASE_URL}/trending/tv/day?api_key=${TMDB_API_KEY}`)
+                ]);
+
+                if (!trendingMoviesRes.ok) {
+                    throwInvalidKey();
+                    return;
+                }
+
+                const trendingMoviesData = await trendingMoviesRes.json();
+                const trendingTvData = await trendingTvRes.json();
+
+                if (trendingMoviesData.results && trendingMoviesData.results.length > 0) {
+                    setupHero(trendingMoviesData.results[0]);
+                }
+
+                renderMediaRow(trendingMoviesData.results, 'trendingMoviesRow', 'movie');
+                renderMediaRow(trendingTvData.results, 'trendingTvRow', 'tv');
+            } catch (error) {
+                console.error("Error loading home data:", error);
+            }
+        }
+
+        function throwInvalidKey() {
+            localStorage.removeItem('streamflix_tmdb_key');
+            TMDB_API_KEY = "";
+            showApiKeyPrompt();
+            alert("Invalid TMDB API Key. Please check your credentials.");
+        }
+
+        function setupHero(item) {
+            document.getElementById('heroImage').src = HERO_IMG_BASE + (item.backdrop_path || item.poster_path);
+            document.getElementById('heroTitle').textContent = item.title || item.name;
+            document.getElementById('heroOverview').textContent = item.overview;
+            document.getElementById('heroPlayBtn').onclick = () => openWatchView(item.id, 'movie');
+        }
+
+        function renderMediaRow(items, containerId, type) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            items.forEach(item => {
+                const title = item.title || item.name;
+                const poster = item.poster_path ? IMG_BASE_URL + item.poster_path : 'https://placehold.co/300x450/222431/ffffff?text=No+Image';
+                const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+                const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+
+                const card = document.createElement('div');
+                card.className = "flex-shrink-0 w-36 sm:w-44 bg-dark-800 rounded-xl overflow-hidden shadow-lg border border-dark-700 hover:scale-105 transition transform cursor-pointer group";
+                card.onclick = () => openWatchView(item.id, item.media_type || type);
+
+                card.innerHTML = `
+                    <div class="relative aspect-[2/3] overflow-hidden bg-dark-700">
+                        <img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:opacity-90 transition">
+                        <div class="absolute top-2 right-2 bg-dark-900/80 backdrop-blur-sm text-yellow-400 text-xs font-semibold px-2 py-0.5 rounded flex items-center space-x-1">
+                            <i class="fa-solid fa-star text-[10px]"></i>
+                            <span>${rating}</span>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="text-sm font-semibold text-white truncate">${title}</h3>
+                        <div class="flex items-center justify-between text-xs text-gray-400 mt-1">
+                            <span>${year}</span>
+                            <span class="uppercase text-[10px] bg-dark-700 px-1.5 py-0.5 rounded text-gray-300">${item.media_type || type}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function handleSearch() {
+            if (!TMDB_API_KEY) {
+                openSettingsModal();
+                return;
+            }
+
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            showView('resultsView');
+            document.getElementById('resultsHeading').textContent = `Search Results for "${query}"`;
+            const grid = document.getElementById('resultsGrid');
+            grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2">Searching...</p></div>';
+
+            try {
+                const res = await fetch(`${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                
+                const filteredResults = data.results.filter(item => item.media_type === 'movie' || item.media_type === 'tv');
+                
+                if (filteredResults.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400">No movies or TV shows found.</div>';
+                    return;
+                }
+
+                grid.innerHTML = '';
+                filteredResults.forEach(item => {
+                    const title = item.title || item.name;
+                    const poster = item.poster_path ? IMG_BASE_URL + item.poster_path : 'https://placehold.co/300x450/222431/ffffff?text=No+Image';
+                    const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+                    const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+
+                    const card = document.createElement('div');
+                    card.className = "bg-dark-800 rounded-xl overflow-hidden shadow-lg border border-dark-700 hover:scale-105 transition transform cursor-pointer group flex flex-col";
+                    card.onclick = () => openWatchView(item.id, item.media_type);
+
+                    card.innerHTML = `
+                        <div class="relative aspect-[2/3] overflow-hidden bg-dark-700">
+                            <img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:opacity-90 transition">
+                            <div class="absolute top-2 right-2 bg-dark-900/80 backdrop-blur-sm text-yellow-400 text-xs font-semibold px-2 py-0.5 rounded flex items-center space-x-1">
+                                <i class="fa-solid fa-star text-[10px]"></i>
+                               <span>${rating}</span>
+                            </div>
+                        </div>
+                        <div class="p-3 flex flex-col flex-grow justify-between">
+                            <h3 class="text-sm font-semibold text-white truncate">${title}</h3>
+                            <div class="flex items-center justify-between text-xs text-gray-400 mt-2">
+                                <span>${year}</span>
+                                <span class="uppercase text-[10px] bg-dark-700 px-1.5 py-0.5 rounded text-gray-300">${item.media_type}</span>
+                            </div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error("Search error:", error);
+                grid.innerHTML = '<div class="col-span-full text-center py-12 text-red-500">Failed to fetch search results.</div>';
+            }
+        }
+
+        async function filterByType(type) {
+            if (!TMDB_API_KEY) {
+                openSettingsModal();
+                return;
+            }
+
+            showView('resultsView');
+            document.getElementById('resultsHeading').textContent = type === 'movie' ? 'Popular Movies' : 'Popular TV Shows';
+            const grid = document.getElementById('resultsGrid');
+            grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2">Loading...</p></div>';
+
+            try {
+                const res = await fetch(`${TMDB_BASE_URL}/${type}/popular?api_key=${TMDB_API_KEY}`);
+                const data = await res.json();
+
+                grid.innerHTML = '';
+                data.results.forEach(item => {
+                    const title = item.title || item.name;
+                    const poster = item.poster_path ? IMG_BASE_URL + item.poster_path : 'https://placehold.co/300x450/222431/ffffff?text=No+Image';
+                    const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+                    const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+
+                    const card = document.createElement('div');
+                    card.className = "bg-dark-800 rounded-xl overflow-hidden shadow-lg border border-dark-700 hover:scale-105 transition transform cursor-pointer group flex flex-col";
+                    card.onclick = () => openWatchView(item.id, type);
+
+                    card.innerHTML = `
+                        <div class="relative aspect-[2/3] overflow-hidden bg-dark-700">
+                            <img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:opacity-90 transition">
+                            <div class="absolute top-2 right-2 bg-dark-900/80 backdrop-blur-sm text-yellow-400 text-xs font-semibold px-2 py-0.5 rounded flex items-center space-x-1">
+                                <i class="fa-solid fa-star text-[10px]"></i>
+                                <span>${rating}</span>
+                            </div>
+                        </div>
+                        <div class="p-3 flex flex-col flex-grow justify-between">
+                            <h3 class="text-sm font-semibold text-white truncate">${title}</h3>
+                            <div class="flex items-center justify-between text-xs text-gray-400 mt-2">
+                                <span>${year}</span>
+                                <span class="uppercase text-[10px] bg-dark-700 px-1.5 py-0.5 rounded text-gray-300">${type}</span>
+                            </div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error("Filter error:", error);
+                grid.innerHTML = '<div class="col-span-full text-center py-12 text-red-500">Failed to load content.</div>';
+            }
+        }
+
+        async function openWatchView(id, type) {
+            if (!TMDB_API_KEY) {
+                openSettingsModal();
+                return;
+            }
+
+            showView('watchView');
+            currentActiveItem = { id, type };
+            currentSeason = 1;
+            currentEpisode = 1;
+
+            try {
+                const res = await fetch(`${TMDB_BASE_URL}/${type}/${id}?api_key=${TMDB_API_KEY}`);
+                const data = await res.json();
+
+                const title = data.title || data.name;
+                const year = (data.release_date || data.first_air_date || '').substring(0, 4);
+                const rating = data.vote_average ? data.vote_average.toFixed(1) : 'N/A';
+                const runtime = type === 'movie' ? `${data.runtime || 0} min` : `${data.number_of_seasons || 1} Seasons`;
+
+                document.getElementById('watchTitle').textContent = title;
+                document.getElementById('watchYear').textContent = year;
+                document.getElementById('watchRating').innerHTML = `<i class="fa-solid fa-star mr-1"></i> ${rating}`;
+                document.getElementById('watchRuntime').textContent = runtime;
+                document.getElementById('watchOverview').textContent = data.overview;
+
+                const genresContainer = document.getElementById('watchGenres');
+                genresContainer.innerHTML = '';
+                if (data.genres) {
+                    data.genres.forEach(g => {
+                        const tag = document.createElement('span');
+                        tag.className = "bg-dark-700 text-gray-300 text-xs px-2.5 py-1 rounded-full border border-dark-600";
+                        tag.textContent = g.name;
+                        genresContainer.appendChild(tag);
+                    });
+                }
+
+                const epContainer = document.getElementById('episodeSelectorContainer');
+                if (type === 'tv') {
+                    epContainer.classList.remove('hidden');
+                    seasonsList = data.seasons || [];
+                    populateSeasons(seasonsList);
+                    await populateEpisodes(id, currentSeason);
+                } else {
+                    epContainer.classList.add('hidden');
+                }
+
+                updatePlayerUrl();
+
+            } catch (error) {
+                console.error("Error opening watch view:", error);
+            }
+        }
+
+        function populateSeasons(seasons) {
+            const select = document.getElementById('seasonSelect');
+            select.innerHTML = '';
+            seasons.forEach(season => {
+                if (season.season_number > 0) {
+                    const opt = document.createElement('option');
+                    opt.value = season.season_number;
+                    opt.textContent = season.name || `Season ${season.season_number}`;
+                    select.appendChild(opt);
+                }
+            });
+            currentSeason = select.value ? parseInt(select.value) : 1;
+        }
+
+        async function populateEpisodes(tvId, seasonNum) {
+            try {
+                const res = await fetch(`${TMDB_BASE_URL}/tv/${tvId}/season/${seasonNum}?api_key=${TMDB_API_KEY}`);
+                const data = await res.json();
+                const select = document.getElementById('episodeSelect');
+                select.innerHTML = '';
+                
+                if (data.episodes) {
+                    data.episodes.forEach(ep => {
+                        const opt = document.createElement('option');
+                        opt.value = ep.episode_number;
+                        opt.textContent = `Episode ${ep.episode_number}: ${ep.name}`;
+                        select.appendChild(opt);
+                    });
+                    currentEpisode = data.episodes[0] ? data.episodes[0].episode_number : 1;
+                }
+            } catch (error) {
+                console.error("Error fetching episodes:", error);
+            }
+        }
+
+        async function onSeasonChange() {
+            const seasonSelect = document.getElementById('seasonSelect');
+            currentSeason = parseInt(seasonSelect.value);
+            await populateEpisodes(currentActiveItem.id, currentSeason);
+            updatePlayerUrl();
+        }
+
+        function onEpisodeChange() {
+            const epSelect = document.getElementById('episodeSelect');
+            currentEpisode = parseInt(epSelect.value);
+            updatePlayerUrl();
+        }
+
+        function updatePlayerUrl() {
+            const iframe = document.getElementById('videoPlayerFrame');
+            if (!currentActiveItem) return;
+
+            let embedUrl = "";
+            if (currentActiveItem.type === 'movie') {
+                embedUrl = `https://vidsrc.sh/embed/movie/${currentActiveItem.id}`;
+            } else {
+                embedUrl = `https://vidsrc.sh/embed/tv/${currentActiveItem.id}/${currentSeason}/${currentEpisode}`;
+            }
+            iframe.src = embedUrl;
+        }
+
+        function showView(viewId) {
+            document.getElementById('apiKeyPromptView').classList.add('hidden');
+            document.getElementById('homeView').classList.add('hidden');
+            document.getElementById('resultsView').classList.add('hidden');
+            document.getElementById('watchView').classList.add('hidden');
+
+            document.getElementById(viewId).classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function showHome() {
+            if (!TMDB_API_KEY) {
+                showApiKeyPrompt();
+                return;
+            }
+            showView('homeView');
+            document.getElementById('searchInput').value = '';
+        }
+
+        function goBackFromWatch() {
+            document.getElementById('videoPlayerFrame').src = "";
+            showHome();
+        }
+    </script>
+</body>
+</html>
