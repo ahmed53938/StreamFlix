@@ -97,6 +97,19 @@
                 </div>
             </div>
 
+            <!-- Continue Watching Row -->
+            <section id="continueWatchingSection" class="space-y-4 hidden">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg sm:text-xl font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-clock-rotate-left text-red-600"></i>
+                        <span>Continue Watching</span>
+                    </h2>
+                </div>
+                <div id="continueWatchingRow" class="flex space-x-4 overflow-x-auto no-scrollbar pb-4 pt-1">
+                    <!-- Dynamic continue watching cards -->
+                </div>
+            </section>
+
             <!-- Trending Movies Row -->
             <section class="space-y-4">
                 <div class="flex items-center justify-between">
@@ -140,14 +153,21 @@
 
         <!-- Watch / Player View -->
         <div id="watchView" class="hidden space-y-6">
-            <button onclick="goBackFromWatch()" class="text-sm text-gray-400 hover:text-white transition flex items-center space-x-1">
-                <i class="fa-solid fa-arrow-left"></i>
-                <span>Back</span>
-            </button>
+            <div class="flex items-center justify-between">
+                <button onclick="goBackFromWatch()" class="text-sm text-gray-400 hover:text-white transition flex items-center space-x-1">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Back</span>
+                </button>
+                <!-- Manual timestamp progress marker options -->
+                <div class="flex items-center space-x-3 text-xs text-gray-400 bg-dark-800 px-3 py-1.5 rounded-lg border border-dark-700">
+                    <span>Playback Saved Active</span>
+                    <span id="timestampBadge" class="text-red-500 font-semibold">00:00 / Resume Ready</span>
+                </div>
+            </div>
 
             <!-- Embedded Player Container -->
             <div class="relative w-full aspect-video bg-dark-800 rounded-2xl overflow-hidden shadow-2xl border border-dark-700">
-                <iframe id="videoPlayerFrame" src="" class="absolute inset-0 w-full h-full border-0" allowfullscreen ></iframe>
+                <iframe id="videoPlayerFrame" src="" class="absolute inset-0 w-full h-full border-0" allowfullscreen></iframe>
             </div>
 
             <!-- TV Episode Selector Controls -->
@@ -253,6 +273,8 @@
         let currentSeason = 1;
         let currentEpisode = 1;
         let seasonsList = [];
+        let watchTimerInterval = null;
+        let activeWatchSeconds = 0;
 
         // Initialize application on load
         window.addEventListener('DOMContentLoaded', () => {
@@ -309,6 +331,8 @@
                 return;
             }
 
+            renderContinueWatchingRow();
+
             try {
                 const [trendingMoviesRes, trendingTvRes] = await Promise.all([
                     fetch(`${TMDB_BASE_URL}/trending/movie/day?api_key=${TMDB_API_KEY}`),
@@ -333,6 +357,102 @@
                 console.error("Error loading home data:", error);
             }
         }
+
+        // --- CONTINUE WATCHING & TIMESTAMP CACHE LOGIC ---
+        function getContinueWatching() {
+            try {
+                const data = localStorage.getItem('streamflix_continue_watching');
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function formatSecondsToTime(totalSeconds) {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function saveProgressToCache(itemData, season = 1, episode = 1, timestampSeconds = 0) {
+            let list = getContinueWatching();
+            list = list.filter(i => i.id !== itemData.id);
+
+            const newItem = {
+                id: itemData.id,
+                title: itemData.title || itemData.name,
+                poster_path: itemData.poster_path,
+                vote_average: itemData.vote_average,
+                release_date: itemData.release_date || itemData.first_air_date,
+                type: itemData.type || itemData.media_type || (itemData.number_of_seasons ? 'tv' : 'movie'),
+                season: season,
+                episode: episode,
+                timestamp: timestampSeconds,
+                updatedAt: Date.now()
+            };
+
+            list.unshift(newItem);
+            if (list.length > 12) list.pop();
+
+            localStorage.setItem('streamflix_continue_watching', JSON.stringify(list));
+        }
+
+        function removeContinueItem(event, id) {
+            event.stopPropagation();
+            let list = getContinueWatching();
+            list = list.filter(i => i.id !== id);
+            localStorage.setItem('streamflix_continue_watching', JSON.stringify(list));
+            renderContinueWatchingRow();
+        }
+
+        function renderContinueWatchingRow() {
+            const list = getContinueWatching();
+            const section = document.getElementById('continueWatchingSection');
+            const container = document.getElementById('continueWatchingRow');
+
+            if (list.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            container.innerHTML = '';
+
+            list.forEach(item => {
+                const title = item.title;
+                const poster = item.poster_path ? IMG_BASE_URL + item.poster_path : 'https://placehold.co/300x450/222431/ffffff?text=No+Image';
+                const year = (item.release_date || '').substring(0, 4);
+                const rating = item.vote_average ? item.vote_average.toFixed(1) : 'N/A';
+                const subText = item.type === 'tv' ? `S${item.season} E${item.episode}` : 'Movie';
+                const timeLabel = item.timestamp ? `At ${formatSecondsToTime(item.timestamp)}` : '';
+
+                const card = document.createElement('div');
+                card.className = "flex-shrink-0 w-36 sm:w-44 bg-dark-800 rounded-xl overflow-hidden shadow-lg border border-dark-700 hover:scale-105 transition transform cursor-pointer group relative";
+                card.onclick = () => openWatchView(item.id, item.type);
+
+                card.innerHTML = `
+                    <div class="relative aspect-[2/3] overflow-hidden bg-dark-700">
+                        <img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:opacity-90 transition">
+                        <div class="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow">
+                            ${subText}
+                        </div>
+                        ${timeLabel ? `<div class="absolute bottom-2 left-2 right-2 bg-dark-900/90 text-gray-200 text-[10px] text-center py-0.5 rounded">${timeLabel}</div>` : ''}
+                        <button onclick="removeContinueItem(event, ${item.id})" title="Remove" class="absolute top-2 right-2 w-7 h-7 bg-dark-900/80 hover:bg-red-600 text-gray-300 hover:text-white rounded-full flex items-center justify-center transition opacity-0 group-hover:opacity-100">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="text-sm font-semibold text-white truncate">${title}</h3>
+                        <div class="flex items-center justify-between text-xs text-gray-400 mt-1">
+                            <span>${year}</span>
+                            <span class="uppercase text-[10px] bg-dark-700 px-1.5 py-0.5 rounded text-gray-300">${item.type}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+        // --- END CONTINUE WATCHING CACHE LOGIC ---
 
         function throwInvalidKey() {
             localStorage.removeItem('streamflix_tmdb_key');
@@ -423,7 +543,7 @@
                             <img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:opacity-90 transition">
                             <div class="absolute top-2 right-2 bg-dark-900/80 backdrop-blur-sm text-yellow-400 text-xs font-semibold px-2 py-0.5 rounded flex items-center space-x-1">
                                 <i class="fa-solid fa-star text-[10px]"></i>
-                               <span>${rating}</span>
+                                <span>${rating}</span>
                             </div>
                         </div>
                         <div class="p-3 flex flex-col flex-grow justify-between">
@@ -500,8 +620,23 @@
 
             showView('watchView');
             currentActiveItem = { id, type };
-            currentSeason = 1;
-            currentEpisode = 1;
+
+            const cachedList = getContinueWatching();
+            const existingEntry = cachedList.find(i => i.id === id);
+
+            if (existingEntry) {
+                if (type === 'tv') {
+                    currentSeason = existingEntry.season || 1;
+                    currentEpisode = existingEntry.episode || 1;
+                }
+                activeWatchSeconds = existingEntry.timestamp || 0;
+            } else {
+                currentSeason = 1;
+                currentEpisode = 1;
+                activeWatchSeconds = 0;
+            }
+
+            startWatchTimer();
 
             try {
                 const res = await fetch(`${TMDB_BASE_URL}/${type}/${id}?api_key=${TMDB_API_KEY}`);
@@ -540,9 +675,36 @@
                 }
 
                 updatePlayerUrl();
+                saveProgressToCache(data, currentSeason, currentEpisode, activeWatchSeconds);
 
             } catch (error) {
                 console.error("Error opening watch view:", error);
+            }
+        }
+
+        function startWatchTimer() {
+            if (watchTimerInterval) clearInterval(watchTimerInterval);
+            
+            // Increment timestamp counter every second to simulate active progress tracker
+            watchTimerInterval = setInterval(() => {
+                activeWatchSeconds++;
+                document.getElementById('timestampBadge').textContent = `${formatSecondsToTime(activeWatchSeconds)} Elapsed`;
+                
+                // Periodically autosave timestamp in background
+                if (currentActiveItem && activeWatchSeconds % 10 === 0) {
+                    autosaveCurrentTimestamp();
+                }
+            }, 1000);
+        }
+
+        async function autosaveCurrentTimestamp() {
+            if (!currentActiveItem) return;
+            try {
+                const res = await fetch(`${TMDB_BASE_URL}/${currentActiveItem.type}/${currentActiveItem.id}?api_key=${TMDB_API_KEY}`);
+                const data = await res.json();
+                saveProgressToCache(data, currentSeason, currentEpisode, activeWatchSeconds);
+            } catch (e) {
+                console.error("Autosave error:", e);
             }
         }
 
@@ -557,7 +719,11 @@
                     select.appendChild(opt);
                 }
             });
-            currentSeason = select.value ? parseInt(select.value) : 1;
+            select.value = currentSeason;
+            if (!select.value && select.options.length > 0) {
+                select.selectedIndex = 0;
+                currentSeason = parseInt(select.value);
+            }
         }
 
         async function populateEpisodes(tvId, seasonNum) {
@@ -574,7 +740,12 @@
                         opt.textContent = `Episode ${ep.episode_number}: ${ep.name}`;
                         select.appendChild(opt);
                     });
-                    currentEpisode = data.episodes[0] ? data.episodes[0].episode_number : 1;
+                    
+                    select.value = currentEpisode;
+                    if (!select.value && data.episodes.length > 0) {
+                        select.selectedIndex = 0;
+                        currentEpisode = data.episodes[0].episode_number;
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching episodes:", error);
@@ -584,14 +755,25 @@
         async function onSeasonChange() {
             const seasonSelect = document.getElementById('seasonSelect');
             currentSeason = parseInt(seasonSelect.value);
+            currentEpisode = 1;
+            activeWatchSeconds = 0; // Reset timestamp on season/episode switch
             await populateEpisodes(currentActiveItem.id, currentSeason);
             updatePlayerUrl();
+
+            const res = await fetch(`${TMDB_BASE_URL}/tv/${currentActiveItem.id}?api_key=${TMDB_API_KEY}`);
+            const data = await res.json();
+            saveProgressToCache(data, currentSeason, currentEpisode, activeWatchSeconds);
         }
 
-        function onEpisodeChange() {
+        async function onEpisodeChange() {
             const epSelect = document.getElementById('episodeSelect');
             currentEpisode = parseInt(epSelect.value);
+            activeWatchSeconds = 0;
             updatePlayerUrl();
+
+            const res = await fetch(`${TMDB_BASE_URL}/tv/${currentActiveItem.id}?api_key=${TMDB_API_KEY}`);
+            const data = await res.json();
+            saveProgressToCache(data, currentSeason, currentEpisode, activeWatchSeconds);
         }
 
         function updatePlayerUrl() {
@@ -618,15 +800,26 @@
         }
 
         function showHome() {
+            if (watchTimerInterval) clearInterval(watchTimerInterval);
             if (!TMDB_API_KEY) {
                 showApiKeyPrompt();
                 return;
             }
             showView('homeView');
             document.getElementById('searchInput').value = '';
+            renderContinueWatchingRow();
         }
 
-        function goBackFromWatch() {
+        async function goBackFromWatch() {
+            if (watchTimerInterval) clearInterval(watchTimerInterval);
+            // Save final timestamp before heading back
+            if (currentActiveItem) {
+                try {
+                    const res = await fetch(`${TMDB_BASE_URL}/${currentActiveItem.type}/${currentActiveItem.id}?api_key=${TMDB_API_KEY}`);
+                    const data = await res.json();
+                    saveProgressToCache(data, currentSeason, currentEpisode, activeWatchSeconds);
+                } catch (e) {}
+            }
             document.getElementById('videoPlayerFrame').src = "";
             showHome();
         }
